@@ -73,10 +73,24 @@ router.get('/', async (req, res) => {
       ORDER BY r.started_at DESC
       LIMIT 200
     `);
+
     res.json(rows);
+
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to list rides' });
+
+    console.error('LIST RIDES ERROR:', {
+      message: err.message,
+      code: err.code,
+      detail: err.detail,
+      hint: err.hint
+    });
+
+    res.status(500).json({
+      error: err.message,
+      code: err.code,
+      detail: err.detail,
+      hint: err.hint
+    });
   }
 });
 
