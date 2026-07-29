@@ -6,13 +6,18 @@ const connectionString = process.env.DATABASE_URL;
 
 const pool = new Pool(
   connectionString
-    ? { connectionString, ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false } }
+    ? {
+        connectionString,
+        ssl: connectionString.includes('localhost')
+          ? false
+          : { rejectUnauthorized: false }
+      }
     : {
         host: process.env.PGHOST || 'localhost',
         port: process.env.PGPORT || 5432,
         user: process.env.PGUSER || 'postgres',
         password: process.env.PGPASSWORD || 'postgres',
-        database: process.env.PGDATABASE || 'cabride',
+        database: process.env.PGDATABASE || 'cabride'
       }
 );
 
@@ -54,14 +59,36 @@ CREATE INDEX IF NOT EXISTS idx_rides_status ON rides(status);
 `;
 
 async function initSchema() {
+  console.log('Checking database connection...');
+
+  const result = await pool.query('SELECT now() AS now');
+  console.log('Database connected:', result.rows[0].now);
+
+  console.log('Ensuring pgcrypto extension exists...');
   await pool.query('CREATE EXTENSION IF NOT EXISTS pgcrypto;');
+
+  console.log('Ensuring database schema exists...');
   await pool.query(SCHEMA);
+
+  console.log('Database schema ready.');
 }
 
 if (require.main === module && process.argv.includes('--init')) {
   initSchema()
-    .then(() => { console.log('Schema ready.'); process.exit(0); })
-    .catch((err) => { console.error('Schema init failed:', err); process.exit(1); });
+    .then(() => {
+      console.log('Schema ready.');
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error('Schema init failed:', {
+        message: err.message,
+        code: err.code,
+        detail: err.detail,
+        hint: err.hint,
+        stack: err.stack
+      });
+      process.exit(1);
+    });
 }
 
 module.exports = { pool, initSchema };
