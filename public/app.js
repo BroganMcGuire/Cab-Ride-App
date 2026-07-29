@@ -129,14 +129,32 @@
     return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
-  async function startNewRide() {
-    try {
-      const ride = await api('/api/rides', { method: 'POST', body: {} });
-      await openRide(ride.id, ride);
-    } catch (err) {
-      toast(`Couldn't start ride — ${err.message}`);
-    }
+async function startNewRide() {
+
+  const rideName = prompt(
+    'Enter ride name:',
+    `Ride ${new Date().toLocaleDateString()}`
+  );
+
+  // User pressed Cancel
+  if (rideName === null) return;
+
+  const finalName = rideName.trim() || `Ride ${new Date().toLocaleDateString()}`;
+
+  try {
+    const ride = await api('/api/rides', {
+      method: 'POST',
+      body: {
+        name: finalName
+      }
+    });
+
+    await openRide(ride.id, ride);
+
+  } catch (err) {
+    toast(`Couldn't start ride — ${err.message}`);
   }
+}
 
   async function openRide(rideId, prefetched) {
     try {
