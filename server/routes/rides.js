@@ -19,6 +19,13 @@ router.post('/', async (req, res) => {
         ? name.trim()
         : rideName(new Date());
 
+    console.log('Creating ride:', {
+      finalName,
+      defaultElr: defaultElr || null,
+      defaultTrackId: defaultTrackId || null,
+      riderName: riderName || null
+    });
+
     const { rows } = await pool.query(
       `INSERT INTO rides (
         name,
@@ -26,7 +33,7 @@ router.post('/', async (req, res) => {
         default_track_id,
         rider_name
       )
-      VALUES ($1,$2,$3,$4)
+      VALUES ($1, $2, $3, $4)
       RETURNING *`,
       [
         finalName,
@@ -37,13 +44,20 @@ router.post('/', async (req, res) => {
     );
 
     res.status(201).json(rows[0]);
-
   } catch (err) {
-    console.error('CREATE RIDE ERROR:', err);
+    console.error('CREATE RIDE ERROR:', {
+      message: err.message,
+      code: err.code,
+      detail: err.detail,
+      hint: err.hint,
+      stack: err.stack
+    });
 
     res.status(500).json({
-      error: err.message,
-      details: err.detail || null
+      error: err.message || 'Failed to create ride',
+      code: err.code || null,
+      detail: err.detail || null,
+      hint: err.hint || null
     });
   }
 });
