@@ -1,8 +1,13 @@
 const { Pool } = require('pg');
 
-// Render provides DATABASE_URL automatically when a Postgres DB is linked to the service.
-// Falls back to individual PG* env vars for local dev.
+// Render should provide DATABASE_URL when a PostgreSQL database is linked.
+// If DATABASE_URL is missing in production, the app should fail clearly
+// instead of quietly trying localhost.
 const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString && process.env.NODE_ENV === 'production') {
+  console.error('DATABASE_URL is missing. Add a Render PostgreSQL database and set DATABASE_URL on the web service.');
+}
 
 const pool = new Pool(
   connectionString
@@ -59,8 +64,11 @@ CREATE INDEX IF NOT EXISTS idx_rides_status ON rides(status);
 `;
 
 async function initSchema() {
-  console.log('Checking database connection...');
+  if (!connectionString && process.env.NODE_ENV === 'production') {
+    throw new Error('DATABASE_URL is missing on Render. Add a PostgreSQL database and set DATABASE_URL.');
+  }
 
+  console.log('Checking database connection...');
   const result = await pool.query('SELECT now() AS now');
   console.log('Database connected:', result.rows[0].now);
 
