@@ -168,7 +168,13 @@ router.post('/:id/faults', async (req, res) => {
        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, COALESCE($14, now()))
        ON CONFLICT (ride_id, client_id) DO UPDATE SET
          fault_type = EXCLUDED.fault_type,
-         severity = EXCLUDED.severity
+         severity = EXCLUDED.severity,
+         elr = EXCLUDED.elr,
+         track_id = EXCLUDED.track_id,
+         mileage_miles = EXCLUDED.mileage_miles,
+         mileage_yards = EXCLUDED.mileage_yards,
+         match_distance_m = EXCLUDED.match_distance_m,
+         notes = EXCLUDED.notes
        RETURNING *`,
       [
         req.params.id, clientId || null, faultType, severity || 'moderate', lat, lng, gpsAccuracyM || null,
@@ -196,7 +202,7 @@ router.patch('/:id/faults/:faultId', async (req, res) => {
          mileage_miles = COALESCE($7, mileage_miles),
          mileage_yards = COALESCE($8, mileage_yards),
          notes = COALESCE($9, notes)
-       WHERE ride_id=$1 AND id=$2 RETURNING *`,
+       WHERE ride_id=$1 AND (id::text = $2 OR client_id = $2) RETURNING *`,
       [req.params.id, req.params.faultId, faultType, severity, elr, trackId, mileageMiles, mileageYards, notes]
     );
     if (!rows.length) return res.status(404).json({ error: 'Fault not found' });

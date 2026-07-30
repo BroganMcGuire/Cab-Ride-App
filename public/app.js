@@ -23,6 +23,13 @@
     sevOverlay: $('#severity-overlay'),
     sevTitle: $('#severity-title'),
     sevCancel: $('#severity-cancel'),
+    noteOverlay: $('#note-overlay'),
+    noteTitle: $('#note-title'),
+    notePresets: $('#note-presets'),
+    noteInput: $('#note-input'),
+    noteSave: $('#note-save'),
+    noteClear: $('#note-clear'),
+    noteCancel: $('#note-cancel'),
     toast: $('#toast'),
   };
 
@@ -30,9 +37,14 @@
     ride: null,          // currently open ride record
     faults: [],          // local faults for current ride (merged local+server)
     watchId: null,
-    lastFix: null,        // { lat, lng, accuracy }
-    lastLocate: null,     // TrackLookup result
+    lastFix: null,        // { lat, lng, accuracy } — live, continuously updated
+    lastLocate: null,     // TrackLookup result — live, continuously updated
     pendingType: null,    // fault type awaiting severity pick
+    pendingFix: null,     // GPS fix FROZEN at the moment Top/Alignment was tapped
+    pendingLocate: null,  // TrackLookup result frozen at the same moment
+    pendingCapturedAt: null, // timestamp frozen at the same moment
+    pendingMarker: null,  // temporary map pin shown while severity is being chosen
+    editingNoteClientId: null, // clientId of the fault currently open in the note overlay
     map: null,
     posMarker: null,
     faultMarkers: [],
@@ -207,7 +219,7 @@ async function startNewRide() {
       clientId: f.client_id || f.id, id: f.id, faultType: f.fault_type, severity: f.severity,
       lat: f.lat, lng: f.lng, gpsAccuracyM: f.gps_accuracy_m, elr: f.elr, trackId: f.track_id,
       mileageMiles: f.mileage_miles, mileageYards: f.mileage_yards, matchDistanceM: f.match_distance_m,
-      capturedAt: f.captured_at, synced: true,
+      notes: f.notes || '', capturedAt: f.captured_at, synced: true,
     };
   }
   function normalizeLocalFault(f) { return { ...f, synced: !!f.synced }; }
@@ -235,9 +247,10 @@ async function startNewRide() {
     state.faultMarkers = [];
     state.faults.forEach((f) => {
       const color = f.faultType === 'top' ? '#d9720f' : '#2f8fc4';
+      const noteHtml = f.notes ? `<br><i>${escapeHtml(f.notes)}</i>` : '';
       const marker = L.circleMarker([f.lat, f.lng], {
         radius: 7, color: '#0d1011', weight: 1.5, fillColor: color, fillOpacity: 0.95,
-      }).bindPopup(`<b>${f.faultType.toUpperCase()}</b> (${f.severity})<br>${f.elr || '—'} ${f.trackId || ''}<br>${fmtMileage(f.mileageMiles, f.mileageYards)}`);
+      }).bindPopup(`<b>${f.faultType.toUpperCase()}</b> (${f.severity})<br>${f.elr || '—'} ${f.trackId || ''}<br>${fmtMileage(f.mileageMiles, f.mileageYards)}${noteHtml}`);
       marker.addTo(state.map);
       state.faultMarkers.push(marker);
     });
@@ -305,27 +318,59 @@ async function startNewRide() {
     const btn = e.target.closest('.fault-btn');
     if (!btn) return;
     if (!state.lastFix) { toast('Waiting for GPS fix before logging a fault…'); return; }
+
+    // Freeze location right now — the train keeps moving while severity is
+    // picked, so the pin must lock to this instant, not whenever the
+    // severity button happens to be tapped.
     state.pendingType = btn.dataset.type;
+    state.pendingFix = { ...state.lastFix };
+    state.pendingLocate = state.lastLocate ? { ...state.lastLocate } : null;
+    state.pendingCapturedAt = new Date().toISOString();
+
+    showPendingMarker(btn.dataset.type, state.pendingFix);
+
     el.sevTitle.textContent = `${state.pendingType.toUpperCase()} fault — severity?`;
     el.sevOverlay.hidden = false;
   });
 
+  function showPendingMarker(faultType, fix) {
+    clearPendingMarker();
+    const color = faultType === 'top' ? '#d9720f' : '#2f8fc4';
+    state.pendingMarker = L.circleMarker([fix.lat, fix.lng], {
+      radius: 9, color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.6,
+      className: 'pending-fault-marker',
+    }).addTo(state.map);
+  }
+
+  function clearPendingMarker() {
+    if (state.pendingMarker) {
+      state.map.removeLayer(state.pendingMarker);
+      state.pendingMarker = null;
+    }
+  }
+
+  function clearPending() {
+    state.pendingType = null;
+    state.pendingFix = null;
+    state.pendingLocate = null;
+    state.pendingCapturedAt = null;
+    clearPendingMarker();
+  }
+
   el.sevOverlay.addEventListener('click', async (e) => {
     if (e.target === el.sevOverlay || e.target === el.sevCancel) {
       el.sevOverlay.hidden = true;
-      state.pendingType = null;
+      clearPending();
       return;
     }
     const btn = e.target.closest('.sev-btn');
     if (!btn) return;
-    await captureFault(state.pendingType, btn.dataset.sev);
+    await captureFault(state.pendingType, btn.dataset.sev, state.pendingFix, state.pendingLocate, state.pendingCapturedAt);
     el.sevOverlay.hidden = true;
-    state.pendingType = null;
+    clearPending();
   });
 
-  async function captureFault(faultType, severity) {
-    const fix = state.lastFix;
-    const locate = state.lastLocate;
+  async function captureFault(faultType, severity, fix, locate, capturedAt) {
     const fault = {
       clientId: uuid(),
       rideId: state.ride.id,
@@ -336,7 +381,8 @@ async function startNewRide() {
       mileageMiles: locate ? locate.mileageMiles : null,
       mileageYards: locate ? locate.mileageYards : null,
       matchDistanceM: locate ? locate.distanceM : null,
-      capturedAt: new Date().toISOString(),
+      notes: '',
+      capturedAt: capturedAt || new Date().toISOString(),
       synced: false,
     };
     await IDB.saveFault(fault);
@@ -368,18 +414,92 @@ async function startNewRide() {
       const row = document.createElement('div');
       row.className = 'fault-row' + (f.synced ? '' : ' pending');
       const t = new Date(f.capturedAt);
+      const noteLine = f.notes
+        ? `<div class="fault-row-note">${escapeHtml(f.notes)}</div>`
+        : `<div class="fault-row-note-empty">Tap to add note…</div>`;
       row.innerHTML = `
         <span class="fault-tag ${f.faultType}">${f.faultType === 'top' ? 'TOP' : 'ALIGN'}</span>
         <span class="fault-sev-dot ${f.severity}"></span>
         <div class="fault-row-main">
           <div class="fault-row-loc">${f.elr || '—'} ${f.trackId || ''} · ${fmtMileage(f.mileageMiles, f.mileageYards)}</div>
           <div class="fault-row-time">${t.toLocaleTimeString()} ${f.synced ? '' : '· <span class="fault-row-pending-badge">SYNCING…</span>'}</div>
+          ${noteLine}
         </div>
         <button class="fault-row-del" aria-label="Delete" data-id="${f.clientId}">✕</button>
       `;
-      row.querySelector('.fault-row-del').addEventListener('click', () => deleteFaultRow(f.clientId));
+      row.querySelector('.fault-row-main').addEventListener('click', () => openNoteEditor(f.clientId));
+      row.querySelector('.fault-row-del').addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteFaultRow(f.clientId);
+      });
       el.faultList.appendChild(row);
     });
+  }
+
+  // ---------- fault notes ----------
+  function openNoteEditor(clientId) {
+    const fault = state.faults.find((f) => f.clientId === clientId);
+    if (!fault) return;
+    state.editingNoteClientId = clientId;
+    el.noteTitle.textContent = `${fault.faultType === 'top' ? 'TOP' : 'ALIGNMENT'} — ${fault.elr || '—'} ${fmtMileage(fault.mileageMiles, fault.mileageYards)}`;
+    el.noteInput.value = fault.notes || '';
+    el.noteClear.hidden = !fault.notes;
+    el.noteOverlay.hidden = false;
+    setTimeout(() => el.noteInput.focus(), 50);
+  }
+
+  function closeNoteEditor() {
+    el.noteOverlay.hidden = true;
+    state.editingNoteClientId = null;
+    el.noteInput.value = '';
+  }
+
+  el.notePresets.addEventListener('click', (e) => {
+    const btn = e.target.closest('.note-preset-btn');
+    if (!btn) return;
+    saveFaultNote(state.editingNoteClientId, btn.dataset.note);
+  });
+
+  el.noteSave.addEventListener('click', () => {
+    saveFaultNote(state.editingNoteClientId, el.noteInput.value.trim());
+  });
+
+  el.noteInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); el.noteSave.click(); }
+  });
+
+  el.noteClear.addEventListener('click', () => {
+    saveFaultNote(state.editingNoteClientId, '');
+  });
+
+  el.noteCancel.addEventListener('click', closeNoteEditor);
+  el.noteOverlay.addEventListener('click', (e) => {
+    if (e.target === el.noteOverlay) closeNoteEditor();
+  });
+
+  async function saveFaultNote(clientId, noteText) {
+    if (!clientId) return;
+    const fault = state.faults.find((f) => f.clientId === clientId);
+    if (!fault) return;
+    fault.notes = noteText;
+    await IDB.saveFault(fault);
+    renderFaultList();
+    renderFaultMarkers();
+    closeNoteEditor();
+    toast(noteText ? 'Note saved' : 'Note cleared');
+
+    if (fault.synced && navigator.onLine) {
+      try {
+        await api(`/api/rides/${state.ride.id}/faults/${clientId}`, {
+          method: 'PATCH',
+          body: { notes: noteText },
+        });
+      } catch (err) {
+        toast(`Note saved locally — will retry sync (${err.message})`);
+      }
+    }
+    // If not yet synced, the note travels with the fault the next time
+    // syncFault() sends it (see syncFault below).
   }
 
   // ---------- sync ----------
@@ -393,7 +513,7 @@ async function startNewRide() {
           lat: fault.lat, lng: fault.lng, gpsAccuracyM: fault.gpsAccuracyM,
           elr: fault.elr, trackId: fault.trackId, mileageMiles: fault.mileageMiles,
           mileageYards: fault.mileageYards, matchDistanceM: fault.matchDistanceM,
-          capturedAt: fault.capturedAt,
+          notes: fault.notes || '', capturedAt: fault.capturedAt,
         },
       });
       await IDB.markSynced(fault.clientId, { id: saved.id });

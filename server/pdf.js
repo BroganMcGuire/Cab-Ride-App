@@ -108,7 +108,7 @@ async function buildRidePdf(ride, faults) {
     });
     x += colWidths[6];
 
-    const notes = (f.notes || '').slice(0, 40);
+    const notes = (f.notes || '').slice(0, 65);
     page.drawText(notes, { x, y: y - 13, size: 8, font, color: COLORS.muted });
 
     page.drawLine({

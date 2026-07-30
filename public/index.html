@@ -100,6 +100,24 @@
   </div>
 </div>
 
+<!-- NOTE OVERLAY -->
+<div id="note-overlay" class="overlay" hidden>
+  <div class="overlay-card">
+    <div class="overlay-title" id="note-title">Add note</div>
+    <div class="note-presets" id="note-presets">
+      <button class="note-preset-btn" data-note="S&amp;C">S&amp;C</button>
+      <button class="note-preset-btn" data-note="Level Crossing">Level Crossing</button>
+      <button class="note-preset-btn" data-note="Bridge">Bridge</button>
+    </div>
+    <div class="note-custom-row">
+      <input type="text" id="note-input" class="note-input" placeholder="Or type your own…" maxlength="120" />
+      <button id="note-save" class="note-save-btn">Save</button>
+    </div>
+    <button class="note-clear-btn" id="note-clear" hidden>Clear note</button>
+    <button class="overlay-cancel" id="note-cancel">Cancel</button>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div id="toast" class="toast" hidden></div>
 
