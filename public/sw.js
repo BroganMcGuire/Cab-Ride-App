@@ -1,4 +1,4 @@
-const CACHE = 'trackgeo-v1';
+const CACHE = 'trackgeo-v2';
 const SHELL = [
   '/',
   '/index.html',
