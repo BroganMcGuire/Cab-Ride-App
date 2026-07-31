@@ -87,6 +87,33 @@
   <div id="fault-list" class="fault-list"></div>
 </main>
 
+<!-- NEW RIDE FORM OVERLAY -->
+<div id="new-ride-overlay" class="overlay" hidden>
+  <div class="overlay-card">
+    <div class="overlay-title">Start New Ride</div>
+    <form id="new-ride-form">
+      <div class="form-field">
+        <label for="nr-name">Name</label>
+        <input type="text" id="nr-name" class="note-input" placeholder="Rider name" autocomplete="name">
+      </div>
+      <div class="form-field">
+        <label for="nr-start">Start location</label>
+        <input type="text" id="nr-start" class="note-input" placeholder="e.g. London Euston">
+      </div>
+      <div class="form-field">
+        <label for="nr-end">End location</label>
+        <input type="text" id="nr-end" class="note-input" placeholder="e.g. Birmingham New Street">
+      </div>
+      <div class="form-field">
+        <label for="nr-date">Date</label>
+        <input type="date" id="nr-date" class="note-input">
+      </div>
+      <button type="submit" id="nr-start-btn" class="btn-primary btn-huge nr-submit">Start Ride</button>
+    </form>
+    <button class="overlay-cancel" id="nr-cancel">Cancel</button>
+  </div>
+</div>
+
 <!-- SEVERITY PICKER OVERLAY -->
 <div id="severity-overlay" class="overlay" hidden>
   <div class="overlay-card">
