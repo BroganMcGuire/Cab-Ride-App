@@ -134,19 +134,25 @@ h1 { font-size: 19px; margin: 0; letter-spacing: -0.01em; }
   border-radius: 12px;
   padding: 12px 14px;
   display: flex;
-  justify-content: space-between;
+  gap: 10px;
   align-items: center;
   cursor: pointer;
 }
 .ride-card:active { background: #262e31; }
+.ride-card-main { flex: 1; min-width: 0; }
 .ride-card-name { font-size: 14.5px; font-weight: 600; }
 .ride-card-meta { font-size: 12px; color: var(--text-dim); margin-top: 2px; font-family: var(--mono); }
 .ride-card-badge {
   font-family: var(--mono); font-size: 11px; color: var(--amber);
   border: 1px solid var(--amber); border-radius: 20px; padding: 3px 9px;
-  flex-shrink: 0; margin-left: 10px;
+  flex-shrink: 0;
 }
 .ride-card-badge.completed { color: var(--text-dim); border-color: var(--line); }
+.ride-card-del {
+  background: none; border: none; color: var(--text-dim); font-size: 16px;
+  cursor: pointer; padding: 6px 4px; flex-shrink: 0;
+}
+.ride-card-del:active { color: var(--red); }
 
 /* RIDE SCREEN */
 #screen-ride { padding: 0; gap: 0; }
@@ -277,6 +283,15 @@ h1 { font-size: 19px; margin: 0; letter-spacing: -0.01em; }
   width: 100%; background: none; border: 1px solid var(--red); color: var(--red);
   border-radius: 12px; padding: 11px; font-size: 13.5px; margin-bottom: 10px; cursor: pointer;
 }
+
+/* NEW RIDE FORM */
+.form-field { margin-bottom: 12px; }
+.form-field label {
+  display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-dim); margin-bottom: 5px; font-weight: 600;
+}
+.form-field input[type="date"] { color-scheme: dark; }
+.nr-submit { width: 100%; margin-top: 4px; margin-bottom: 10px; }
 
 /* TOAST */
 .toast {
