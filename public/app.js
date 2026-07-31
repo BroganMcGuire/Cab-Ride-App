@@ -30,6 +30,13 @@
     noteSave: $('#note-save'),
     noteClear: $('#note-clear'),
     noteCancel: $('#note-cancel'),
+    newRideOverlay: $('#new-ride-overlay'),
+    newRideForm: $('#new-ride-form'),
+    nrName: $('#nr-name'),
+    nrStart: $('#nr-start'),
+    nrEnd: $('#nr-end'),
+    nrDate: $('#nr-date'),
+    nrCancel: $('#nr-cancel'),
     toast: $('#toast'),
   };
 
@@ -123,13 +130,21 @@
         card.className = 'ride-card';
         const started = new Date(r.started_at);
         card.innerHTML = `
-          <div>
+          <div class="ride-card-main">
             <div class="ride-card-name">${escapeHtml(r.name)}</div>
             <div class="ride-card-meta">${started.toLocaleDateString()} ${started.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${r.fault_count} fault${r.fault_count === 1 ? '' : 's'}</div>
           </div>
           <span class="ride-card-badge ${r.status === 'completed' ? 'completed' : ''}">${r.status === 'active' ? 'ACTIVE' : 'DONE'}</span>
+          <button class="ride-card-del" aria-label="Delete ride" data-id="${r.id}">✕</button>
         `;
-        card.addEventListener('click', () => openRide(r.id));
+        card.addEventListener('click', (e) => {
+          if (e.target.closest('.ride-card-del')) return;
+          openRide(r.id);
+        });
+        card.querySelector('.ride-card-del').addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteRide(r.id, r.name);
+        });
         el.historyList.appendChild(card);
       });
     } catch (err) {
@@ -137,36 +152,70 @@
     }
   }
 
+  async function deleteRide(rideId, name) {
+    const ok = confirm(`Delete "${name}"?\n\nThis permanently removes the ride and every fault logged on it. This cannot be undone.\n\nAre you sure?`);
+    if (!ok) return;
+    try {
+      await api(`/api/rides/${rideId}`, { method: 'DELETE' });
+      toast('Ride deleted');
+      loadHistory();
+    } catch (err) {
+      toast(`Couldn't delete ride — ${err.message}`);
+    }
+  }
+
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
-async function startNewRide() {
-
-  const rideName = prompt(
-    'Enter ride name:',
-    `Ride ${new Date().toLocaleDateString()}`
-  );
-
-  // User pressed Cancel
-  if (rideName === null) return;
-
-  const finalName = rideName.trim() || `Ride ${new Date().toLocaleDateString()}`;
-
-  try {
-    const ride = await api('/api/rides', {
-      method: 'POST',
-      body: {
-        name: finalName
-      }
-    });
-
-    await openRide(ride.id, ride);
-
-  } catch (err) {
-    toast(`Couldn't start ride — ${err.message}`);
+  function openNewRideForm() {
+    el.newRideForm.reset();
+    el.nrDate.value = new Date().toISOString().slice(0, 10); // pre-populate today (YYYY-MM-DD)
+    el.newRideOverlay.hidden = false;
+    setTimeout(() => el.nrName.focus(), 50);
   }
-}
+
+  function closeNewRideForm() {
+    el.newRideOverlay.hidden = true;
+  }
+
+  el.nrCancel.addEventListener('click', closeNewRideForm);
+  el.newRideOverlay.addEventListener('click', (e) => {
+    if (e.target === el.newRideOverlay) closeNewRideForm();
+  });
+
+  // Builds the ride's display name / PDF filename out of whatever the rider
+  // filled in. Falls back gracefully if some (or all) fields are left blank.
+  function buildRideName({ name, start, end, date }) {
+    const parts = [];
+    if (name) parts.push(name);
+    if (start && end) parts.push(`${start} to ${end}`);
+    else if (start) parts.push(`from ${start}`);
+    else if (end) parts.push(`to ${end}`);
+    if (date) parts.push(date);
+    return parts.length ? parts.join(' – ') : `Ride ${new Date().toLocaleDateString()}`;
+  }
+
+  el.newRideForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = el.nrName.value.trim();
+    const start = el.nrStart.value.trim();
+    const end = el.nrEnd.value.trim();
+    const date = el.nrDate.value; // YYYY-MM-DD, or '' if cleared
+
+    const finalName = buildRideName({ name, start, end, date });
+    closeNewRideForm();
+
+    try {
+      const ride = await api('/api/rides', {
+        method: 'POST',
+        body: { name: finalName, riderName: name || null },
+      });
+      await openRide(ride.id, ride);
+    } catch (err) {
+      toast(`Couldn't start ride — ${err.message}`);
+    }
+  });
 
   async function openRide(rideId, prefetched) {
     try {
@@ -554,7 +603,7 @@ async function startNewRide() {
   });
 
   el.backBtn.addEventListener('click', showHome);
-  el.newRideBtn.addEventListener('click', startNewRide);
+  el.newRideBtn.addEventListener('click', openNewRideForm);
 
   // ---------- boot ----------
   async function boot() {
