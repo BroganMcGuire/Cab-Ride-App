@@ -52,4 +52,4 @@ jobs:
           app-name: 'app-cab-ride-app-web-dev'
           slot-name: 'Production'
           package: .
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_670F495D911E47879FA2423168025FB4 }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_EF7BAB1CBF864D9CB2FE948D39B0144A }}
