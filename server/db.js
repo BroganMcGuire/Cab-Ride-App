@@ -1,21 +1,26 @@
 const { Pool } = require('pg');
 
-// Render should provide DATABASE_URL when a PostgreSQL database is linked.
-// If DATABASE_URL is missing in production, the app should fail clearly
-// instead of quietly trying localhost.
-const connectionString = process.env.DATABASE_URL;
+// Use Supabase DB URL if provided, otherwise fall back to DATABASE_URL
+const connectionString = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL;
 
+// In production, fail fast if no connection string
 if (!connectionString && process.env.NODE_ENV === 'production') {
-  console.error('DATABASE_URL is missing. Add a Render PostgreSQL database and set DATABASE_URL on the web service.');
+  console.error('DATABASE_URL or SUPABASE_DB_URL is missing. Add your Supabase Postgres connection string to the environment.');
 }
+
+const isLocal = (str) =>
+  !str ||
+  str.includes('localhost') ||
+  str.includes('127.0.0.1') ||
+  str.startsWith('postgres://localhost') ||
+  str.startsWith('postgres://127.0.0.1');
 
 const pool = new Pool(
   connectionString
     ? {
         connectionString,
-        ssl: connectionString.includes('localhost')
-          ? false
-          : { rejectUnauthorized: false }
+        // enable SSL for non-local hosts (Supabase requires SSL)
+        ssl: isLocal(connectionString) ? false : { rejectUnauthorized: false }
       }
     : {
         host: process.env.PGHOST || 'localhost',
@@ -65,7 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_rides_status ON rides(status);
 
 async function initSchema() {
   if (!connectionString && process.env.NODE_ENV === 'production') {
-    throw new Error('DATABASE_URL is missing on Render. Add a PostgreSQL database and set DATABASE_URL.');
+    throw new Error('DATABASE_URL or SUPABASE_DB_URL is missing on production. Add your Supabase Postgres connection string in the environment.');
   }
 
   console.log('Checking database connection...');
