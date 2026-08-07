@@ -1,35 +1,39 @@
 const { Pool } = require('pg');
 
-// Use Supabase DB URL if provided, otherwise fall back to DATABASE_URL
-const connectionString = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL;
+// Require the Supabase connection string explicitly.
+// Set SUPABASE_DB_URL to your Supabase Postgres connection string (postgres://...)
+// This file will fail fast in production if the value is missing to avoid silent localhost fallbacks.
+const connectionString = process.env.SUPABASE_DB_URL;
 
-// In production, fail fast if no connection string
-if (!connectionString && process.env.NODE_ENV === 'production') {
-  console.error('DATABASE_URL or SUPABASE_DB_URL is missing. Add your Supabase Postgres connection string to the environment.');
+if (!connectionString) {
+  const msg = 'SUPABASE_DB_URL is not set. Set SUPABASE_DB_URL to your Supabase Postgres connection string.';
+  if (process.env.NODE_ENV === 'production') {
+    console.error(msg);
+    throw new Error(msg);
+  } else {
+    // During local development we still throw so you notice the missing config.
+    // If you want to run locally without Supabase, set SUPABASE_DB_URL to a local Postgres URI.
+    console.warn(msg, ' Falling back will NOT be attempted.');
+    // Optionally: process.exit(1); // uncomment to stop startup in dev too
+  }
 }
 
-const isLocal = (str) =>
-  !str ||
-  str.includes('localhost') ||
-  str.includes('127.0.0.1') ||
-  str.startsWith('postgres://localhost') ||
-  str.startsWith('postgres://127.0.0.1');
+console.log('Using DB connection from SUPABASE_DB_URL');
+if (connectionString) {
+  console.log('DB connection prefix:', connectionString.slice(0, 40) + (connectionString.length > 40 ? '...' : ''));
+}
 
-const pool = new Pool(
-  connectionString
-    ? {
-        connectionString,
-        // enable SSL for non-local hosts (Supabase requires SSL)
-        ssl: isLocal(connectionString) ? false : { rejectUnauthorized: false }
-      }
-    : {
-        host: process.env.PGHOST || 'localhost',
-        port: process.env.PGPORT || 5432,
-        user: process.env.PGUSER || 'postgres',
-        password: process.env.PGPASSWORD || 'postgres',
-        database: process.env.PGDATABASE || 'cabride'
-      }
-);
+const pool = new Pool({
+  connectionString,
+  // Supabase requires TLS — disable strict cert verification for convenience.
+  // If you want stricter TLS verification, remove rejectUnauthorized:false and configure CA.
+  ssl: { rejectUnauthorized: false }
+});
+
+// Surface unexpected client errors to logs so connection problems are visible.
+pool.on && pool.on('error', (err) => {
+  console.error('Unexpected Postgres client error', err);
+});
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS rides (
@@ -69,8 +73,8 @@ CREATE INDEX IF NOT EXISTS idx_rides_status ON rides(status);
 `;
 
 async function initSchema() {
-  if (!connectionString && process.env.NODE_ENV === 'production') {
-    throw new Error('DATABASE_URL or SUPABASE_DB_URL is missing on production. Add your Supabase Postgres connection string in the environment.');
+  if (!connectionString) {
+    throw new Error('SUPABASE_DB_URL is not set. Cannot initialize schema.');
   }
 
   console.log('Checking database connection...');
